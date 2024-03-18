@@ -1,52 +1,69 @@
 /**
- * @file poller.hpp
- * @author Kacper Kowalski (kacper.s.kowalski@gmail.com)
- * @brief Implements a poller which polls a predicate with a specific interval, for the specified time.
- * @date 2020-07-31
+ * @file        poller.hpp
+ * @brief       A poller which polls the predicate with specific interval and timeout.
+ * @author      Kacper Kowalski - kacper.s.kowalski@gmail.com
  */
-#ifndef __POLLER_HPP__
-#define __POLLER_HPP__
+#ifndef POLLER2_HPP
+#define POLLER2_HPP
 
+#include <concepts>
 #include <functional>
 
 namespace jungles
 {
 
+struct DelayMilliseconds
+{
+    constexpr DelayMilliseconds(unsigned v) : value{v}
+    {
+    }
+
+    const unsigned value;
+};
+
+struct TimeoutMilliseconds
+{
+    constexpr TimeoutMilliseconds(unsigned v) : value{v}
+    {
+    }
+
+    const unsigned value;
+};
+
+struct PollIntervalMilliseconds
+{
+    constexpr PollIntervalMilliseconds(unsigned v) : value{v}
+    {
+    }
+
+    const unsigned value;
+};
+
 namespace generic
 {
 
-// TODO: Builder pattern for template arguments.
-template<unsigned PollingIntervalInMilliseconds, unsigned TimeoutInMilliseconds>
-class poller
+template<auto MillisecondDelayer>
+    requires std::regular_invocable<decltype(MillisecondDelayer), DelayMilliseconds>
+static inline bool
+poll(PollIntervalMilliseconds interval_ms, TimeoutMilliseconds timeout_ms, std::function<bool(void)> predicate)
 {
-  public:
-    using MillisecondDelayer = std::function<void(unsigned millisecond_delay)>;
+    auto is_interval_multiply_of_timeout{(timeout_ms.value % interval_ms.value) == 0};
 
-    explicit poller(MillisecondDelayer millisecond_delayer) : millisecond_delayer{millisecond_delayer}
+    unsigned num_requests_to_timeout{(timeout_ms.value / interval_ms.value)
+                                     + (is_interval_multiply_of_timeout ? 0 : 1)};
+
+    for (unsigned i{0}; i < num_requests_to_timeout; ++i)
     {
+        if (predicate())
+            return true;
+        MillisecondDelayer(interval_ms.value);
     }
 
-    bool poll(std::function<bool(void)> predicate)
-    {
-        static constexpr auto is_interval_multiply_of_timeout{(TimeoutInMilliseconds % PollingIntervalInMilliseconds)
-                                                              == 0};
-        static constexpr unsigned num_requests_to_timeout{(TimeoutInMilliseconds / PollingIntervalInMilliseconds)
-                                                          + (is_interval_multiply_of_timeout ? 0 : 1)};
-
-        for (unsigned i{0}; i < num_requests_to_timeout; ++i)
-        {
-            if (predicate())
-                return true;
-            millisecond_delayer(PollingIntervalInMilliseconds);
-        }
-        return false;
-    }
-
-  private:
-    MillisecondDelayer millisecond_delayer;
-};
+    return false;
+}
 
 } // namespace generic
+
 } // namespace jungles
 
-#endif // __POLLER_HPP__
+#endif /* POLLER2_HPP */

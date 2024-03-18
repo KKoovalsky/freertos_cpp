@@ -76,7 +76,6 @@ endmacro()
 macro(CreateNativeHelpersTests)
     add_executable(native_helpers_tests
         native/test_poller.cpp
-        native/test_poller2.cpp
         generic/test_thread_pool.cpp
         generic/test_active.cpp
         generic/test_lockable.cpp

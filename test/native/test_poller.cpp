@@ -8,7 +8,7 @@
 
 #include "jungles_os_helpers/generic/poller.hpp"
 
-using namespace jungles::generic;
+using namespace jungles;
 
 TEST_CASE("Poller polls a predicate", "[poller]")
 {
@@ -19,62 +19,72 @@ TEST_CASE("Poller polls a predicate", "[poller]")
         };
     }};
 
+    auto delay{[](DelayMilliseconds) {
+    }};
+
+    auto poll{jungles::generic::poll<delay>};
+
     SECTION("Poller finishes immediately after predicate returns true on the first polling")
     {
-        poller<10, 100> a{[](auto) {
-        }};
-        auto result{a.poll([]() { return true; })};
+        auto result{poll(PollIntervalMilliseconds{10}, TimeoutMilliseconds{100}, []() { return true; })};
         REQUIRE(result == true);
     }
 
     SECTION("Poller finishes immediately after predicate returns true NOT on the first polling")
     {
-        poller<10, 100> a{[&](auto) {
-        }};
-
-        auto result{a.poll(make_predicate_being_false_until_call_number(3))};
-
+        auto result{poll(
+            PollIntervalMilliseconds{10}, TimeoutMilliseconds{100}, make_predicate_being_false_until_call_number(3))};
         REQUIRE(result == true);
     }
 
-    SECTION("Delayer is not called before polling")
+    SECTION("Delayer is not called if first polling returns success")
     {
-        bool delayer_not_called{true};
-        poller<10, 100> a{[&](auto) {
-            delayer_not_called = false;
+        static bool is_called{false};
+        auto delay{[](DelayMilliseconds) {
+            is_called = true;
         }};
-        REQUIRE(delayer_not_called);
+
+        auto poll{jungles::generic::poll<delay>};
+        poll(PollIntervalMilliseconds{10}, TimeoutMilliseconds{100}, []() { return true; });
+
+        REQUIRE(is_called == false);
     }
 
     SECTION("Delayer is called after predicate is false")
     {
-        bool delayer_called{false};
-        poller<10, 100> a{[&](auto) {
-            delayer_called = true;
+        static bool is_delayer_called{false};
+        auto delay{[](DelayMilliseconds) {
+            is_delayer_called = true;
         }};
-        a.poll(make_predicate_being_false_until_call_number(2));
 
-        REQUIRE(delayer_called);
+        auto poll{jungles::generic::poll<delay>};
+        poll(PollIntervalMilliseconds{10}, TimeoutMilliseconds{100}, make_predicate_being_false_until_call_number(2));
+
+        REQUIRE(is_delayer_called);
     }
 
     SECTION("Delayer is called exactly that many times as the predicate is false")
     {
-        unsigned delayer_called_times{0};
-        poller<10, 100> a{[&](auto) {
+        static unsigned delayer_called_times{0};
+        auto delay{[](DelayMilliseconds) {
             ++delayer_called_times;
         }};
-        a.poll(make_predicate_being_false_until_call_number(4));
+
+        auto poll{jungles::generic::poll<delay>};
+        poll(PollIntervalMilliseconds{10}, TimeoutMilliseconds{100}, make_predicate_being_false_until_call_number(4));
 
         REQUIRE(delayer_called_times == 3);
     }
 
     SECTION("Delay is equal to the delay set for the poller")
     {
-        unsigned actual_delay{0};
-        poller<33, 100> a{[&](auto delay) {
-            actual_delay = delay;
+        static unsigned actual_delay{0};
+        auto delay{[](DelayMilliseconds delay_ms) {
+            actual_delay = delay_ms.value;
         }};
-        a.poll(make_predicate_being_false_until_call_number(2));
+
+        auto poll{jungles::generic::poll<delay>};
+        poll(PollIntervalMilliseconds{33}, TimeoutMilliseconds{100}, make_predicate_being_false_until_call_number(2));
 
         REQUIRE(actual_delay == 33);
     }
@@ -83,19 +93,13 @@ TEST_CASE("Poller polls a predicate", "[poller]")
     {
         SECTION("When the timeout is a multiply of the interval")
         {
-            poller<10, 40> a{[](auto) {
-            }};
-            auto result{a.poll([]() { return false; })};
-
+            auto result{poll(PollIntervalMilliseconds{10}, TimeoutMilliseconds{40}, []() { return false; })};
             REQUIRE(result == false);
         }
 
         SECTION("When the timeout is NOT a multiply of the interval")
         {
-            poller<10, 41> a{[](auto) {
-            }};
-            auto result{a.poll([]() { return false; })};
-
+            auto result{poll(PollIntervalMilliseconds{10}, TimeoutMilliseconds{41}, []() { return false; })};
             REQUIRE(result == false);
         }
     }
@@ -104,24 +108,54 @@ TEST_CASE("Poller polls a predicate", "[poller]")
     {
         SECTION("When the timeout is a multiply of the interval")
         {
-            unsigned delayer_called_times{0};
-            poller<10, 100> a{[&](auto) {
+            static unsigned delayer_called_times{0};
+            auto delay{[](DelayMilliseconds) {
                 ++delayer_called_times;
             }};
-            a.poll([]() { return false; });
+
+            auto poll{jungles::generic::poll<delay>};
+            poll(PollIntervalMilliseconds{10}, TimeoutMilliseconds{100}, []() { return false; });
 
             REQUIRE(delayer_called_times == 10);
         }
 
         SECTION("When the timeout is NOT a multiply of the interval")
         {
-            unsigned delayer_called_times{0};
-            poller<10, 101> a{[&](auto) {
+            static unsigned delayer_called_times{0};
+            auto delay{[](DelayMilliseconds) {
                 ++delayer_called_times;
             }};
-            a.poll([]() { return false; });
+
+            auto poll{jungles::generic::poll<delay>};
+            poll(PollIntervalMilliseconds{10}, TimeoutMilliseconds{101}, []() { return false; });
 
             REQUIRE(delayer_called_times == 11);
+        }
+
+        SECTION("When the timeout is lower than the interval")
+        {
+            static unsigned delayer_called_times{0};
+            auto delay{[](DelayMilliseconds) {
+                ++delayer_called_times;
+            }};
+
+            auto poll{jungles::generic::poll<delay>};
+            poll(PollIntervalMilliseconds{10}, TimeoutMilliseconds{5}, []() { return false; });
+
+            REQUIRE(delayer_called_times == 1);
+        }
+
+        SECTION("When the timeout is equal the interval")
+        {
+            static unsigned delayer_called_times{0};
+            auto delay{[](DelayMilliseconds) {
+                ++delayer_called_times;
+            }};
+
+            auto poll{jungles::generic::poll<delay>};
+            poll(PollIntervalMilliseconds{10}, TimeoutMilliseconds{10}, []() { return false; });
+
+            REQUIRE(delayer_called_times == 1);
         }
     }
 }
