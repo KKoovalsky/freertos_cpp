@@ -4,15 +4,23 @@ cmake_minimum_required(VERSION 3.16)
 # Macros
 ################################################################################
 
-
+# Creates the main target for the library
 macro(CreateMainTarget)
     add_library(JunglesOsHelpers INTERFACE)
     target_include_directories(JunglesOsHelpers INTERFACE ${CMAKE_CURRENT_LIST_DIR})
-    target_compile_features(JunglesOsHelpers INTERFACE cxx_std_17)
     add_library(jungles::os_helpers ALIAS JunglesOsHelpers)
 
-    add_library(JunglesOs STATIC jungles_os_helpers/freertos/src/event_group.cpp)
+    add_library(JunglesOs STATIC
+        jungles_os_helpers/freertos/src/event_group.cpp
+        jungles_os_helpers/freertos/src/thread_config.cpp
+    )
     target_include_directories(JunglesOs PUBLIC ${CMAKE_CURRENT_LIST_DIR})
+
+    if(FREERTOS_EXCEPTIONS)
+        target_compile_definitions(JunglesOsHelpers INTERFACE FREERTOS_EXCEPTIONS)
+        target_compile_definitions(JunglesOs INTERFACE FREERTOS_EXCEPTIONS)
+    endif()
+
 endmacro()
 
 
@@ -21,6 +29,8 @@ endmacro()
 ################################################################################
 
 project(JunglesOsHelpers)
+
+option(FREERTOS_EXCEPTIONS "Enables exceptions in FreeRTOS C++ library" ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
