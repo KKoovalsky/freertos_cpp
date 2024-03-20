@@ -12,7 +12,6 @@
 #include "binary_semaphore.hpp"
 #include "thread_config.hpp"
 
-#include <cassert>
 #include <functional>
 #include <string>
 
@@ -35,7 +34,8 @@ class simple_thread
         already_running,
         invalid_thread_code,
         thread_start_failed,
-        not_started
+        not_started,
+        still_running
     };
 
 #ifdef FREERTOS_EXCEPTIONS
@@ -46,10 +46,11 @@ class simple_thread
         }
 
         static inline constexpr const char* error_msgs[] = {"OK",
-                                                            "The thread is already running",
-                                                            "The thread code is not set",
+                                                            "Thread is already running",
+                                                            "Thread code is not set",
                                                             "Failed to create the thread",
-                                                            "The thread is not started"};
+                                                            "Thread is not running",
+                                                            "Thread is still running"};
     };
 #endif // FREERTOS_EXCEPTIONS
 
@@ -62,12 +63,26 @@ class simple_thread
         name = config.name;
         stack_size = config.stack_size;
         priority = config.priority;
+
+        task_started_sem.give();
     }
 
     simple_thread(std::string name, StackSize stack_sz, ThreadPriority prio) :
         name{std::move(name)}, stack_size{stack_sz.value}, priority{prio.value}
     {
+        task_started_sem.give();
     }
+
+#ifdef FREERTOS_EXCEPTIONS
+    ~simple_thread() noexcept(false)
+    {
+        auto is_running{task_started_sem.try_take() == false};
+        if (is_running)
+            throw Exception{Error::still_running};
+    }
+#else
+    // TODO: How to raise an error when the thread is still running, and we can't throw an exception?
+#endif
 
     simple_thread(const simple_thread&) = delete;
     simple_thread& operator=(const simple_thread&) = delete;

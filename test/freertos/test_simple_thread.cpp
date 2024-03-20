@@ -6,26 +6,12 @@
 #include <catch2/matchers/catch_matchers_exception.hpp>
 
 #include <chrono>
-#include <functional>
-#include <stdexcept>
+
+#include "jungles_os_helpers/freertos/simple_thread.hpp"
 
 #include "flag_under_test_definition.hpp"
-#include "platform_utils.hpp"
 
-struct simple_thread
-{
-    struct Error : std::runtime_error
-    {
-        using std::runtime_error::runtime_error;
-    };
-
-    void start(std::function<void(void)>)
-    {
-    }
-    void join()
-    {
-    }
-};
+using namespace freertos;
 
 TEST_CASE("Thread runs in background", "[SimpleThread][SimpleThreadRuns]")
 {
@@ -75,7 +61,7 @@ TEST_CASE("Simple thread negative cases", "[SimpleThread][SimpleThreadNegativeCa
         simple_thread t;
         t.start([&flag]() { flag.wait(); });
 
-        REQUIRE_THROWS_AS(t.start([]() {}), simple_thread::Error);
+        REQUIRE_THROWS_AS(t.start([]() {}), simple_thread::Exception);
         REQUIRE_THROWS_WITH(t.start([]() {}), "Thread is already running");
 
         flag.set();
@@ -85,7 +71,7 @@ TEST_CASE("Simple thread negative cases", "[SimpleThread][SimpleThreadNegativeCa
     SECTION("Joining before starting is an error")
     {
         simple_thread t;
-        REQUIRE_THROWS_AS(t.join(), simple_thread::Error);
+        REQUIRE_THROWS_AS(t.join(), simple_thread::Exception);
         REQUIRE_THROWS_WITH(t.join(), "Thread is not running");
     }
 
@@ -94,22 +80,25 @@ TEST_CASE("Simple thread negative cases", "[SimpleThread][SimpleThreadNegativeCa
         simple_thread t;
         t.start([]() {});
         t.join();
-        REQUIRE_THROWS_AS(t.join(), simple_thread::Error);
+        REQUIRE_THROWS_AS(t.join(), simple_thread::Exception);
         REQUIRE_THROWS_WITH(t.join(), "Thread is not running");
     }
 
     SECTION("Destructing before joining is an error")
     {
-        auto the_test{[]() {
-            auto flag{test::make_flag()};
+        auto flag{test::make_flag()}, sync{test::make_flag()};
+        auto the_test{[&]() {
             simple_thread t;
-            t.start([&flag]() {
-                // Never set
+            t.start([&]() {
                 flag.wait();
+                sync.set();
             });
         }};
 
-        REQUIRE_THROWS_AS(the_test(), simple_thread::Error);
+        REQUIRE_THROWS_AS(the_test(), simple_thread::Exception);
         REQUIRE_THROWS_WITH(the_test(), "Thread is still running");
+
+        flag.set();
+        sync.wait();
     }
 }
