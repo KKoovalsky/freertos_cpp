@@ -325,6 +325,7 @@ TEST_CASE("Event groups are awaited with timeout", "[EventGroup][EventGroupWaitT
         REQUIRE(is_event_set);
         REQUIRE(not captured_event.has_value());
 
+        // TODO: Make the tests not time dependent
         auto duration_ms{std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count()};
         REQUIRE_THAT(duration_ms, Catch::Matchers::WithinAbs(50, 3));
 
