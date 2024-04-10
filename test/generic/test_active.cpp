@@ -8,10 +8,7 @@
 
 #include "active_under_test_definition.hpp"
 
-#include <algorithm>
 #include <functional>
-#include <iostream>
-#include <memory>
 
 TEST_CASE("Active object performs work in background", "[active]")
 {

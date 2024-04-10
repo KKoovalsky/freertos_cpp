@@ -84,21 +84,23 @@ TEST_CASE("Simple thread negative cases", "[SimpleThread][SimpleThreadNegativeCa
         REQUIRE_THROWS_WITH(t.join(), "Thread is not running");
     }
 
-    SECTION("Destructing before joining is an error")
-    {
-        auto flag{test::make_flag()}, sync{test::make_flag()};
-        auto the_test{[&]() {
-            simple_thread t;
-            t.start([&]() {
-                flag.wait();
-                sync.set();
-            });
-        }};
-
-        REQUIRE_THROWS_AS(the_test(), simple_thread::Exception);
-        REQUIRE_THROWS_WITH(the_test(), "Thread is still running");
-
-        flag.set();
-        sync.wait();
-    }
+    // TODO: This test must be a separate executable that throws SIGSEGV: we destruct the thread code while it's
+    // executed!
+    // SECTION("Destructing before joining is an error")
+    // {
+    //     auto flag{test::make_flag()}, sync{test::make_flag()};
+    //     auto the_test{[&]() {
+    //         simple_thread t;
+    //         t.start([&]() {
+    //             flag.wait();
+    //             sync.set();
+    //         });
+    //     }};
+    //
+    //     REQUIRE_THROWS_AS(the_test(), simple_thread::Exception);
+    //     REQUIRE_THROWS_WITH(the_test(), "Thread is still running");
+    //
+    //     flag.set();
+    //     sync.wait();
+    // }
 }
